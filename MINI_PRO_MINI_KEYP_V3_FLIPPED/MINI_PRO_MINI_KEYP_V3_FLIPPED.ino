@@ -32,8 +32,6 @@ bool Pass_is_good;
 char customKey;
 const byte ROWS = 4;
 const byte COLS = 3;
-unsigned long previousMillis = 0;         // last time you connected to the server, in milliseconds
-const unsigned long interval = 1000; // delay between updates, in milliseconds
 char keys[ROWS][COLS] = {
   {'1', '2', '3'},
   {'4', '5', '6'},
@@ -49,7 +47,8 @@ byte colPins[COLS] = {
 Keypad customKeypad( makeKeymap(keys), rowPins, colPins, ROWS, COLS);
 char server[] = "10.2.1.8";
 
-
+unsigned long lastConnectionTime = 0;         // last time you connected to the server, in milliseconds
+const unsigned long postingInterval = 10000L; // delay between updates, in milliseconds
 
 // Initialize the Ethernet client object
 WiFiEspClient client;
@@ -68,9 +67,9 @@ void setup()
   pinMode(green, OUTPUT);
   pinMode(red, OUTPUT);
   pinMode(buzzer, OUTPUT);
-  digitalWrite(blue, LOW);
-  digitalWrite(red, LOW);
-  digitalWrite(green, LOW);
+  digitalWrite(blue, HIGH);
+  digitalWrite(red, HIGH);
+  digitalWrite(green, HIGH);
   digitalWrite(buzzer, HIGH);
   Serial.println("KEYPAD SYSTEM");
   // check for the presence of the shield
@@ -124,7 +123,9 @@ void loop()
 
   // if 10 seconds have passed since your last connection,
   // then connect again and send data
+  if (millis() - lastConnectionTime > postingInterval) {
 
+  }
   if (data_count < passlen - 1)
   {
     digitalWrite(buzzer, HIGH);
@@ -143,18 +144,18 @@ void loop()
       //digitalWrite(buzzer, LOW);
       tone(buzzer, 1200, 50);
       digitalWrite(buzzer, HIGH);
-      digitalWrite(green, HIGH);
-      digitalWrite(red, HIGH);
-      digitalWrite(blue, LOW);
+      digitalWrite(green, LOW);
+      digitalWrite(red, LOW);
+      digitalWrite(blue, HIGH);
       Data[data_count] = customKey; // store char into data array
       Serial.print("Current input: ");
       Serial.println(Data[data_count]); // print char at said cursor
       data_count++; // increment data array by 1 to store new char, also keep track of the number of chars entered
     }
   }
+  
 
-
-  if (Data[0] == '*')
+   if (Data[0] == '*')
   {
     passlen = 13;
     if (data_count == passlen - 1) {
@@ -182,89 +183,85 @@ void loop()
 
 
 void httpInit() {
-
-  noTone(buzzer);
-  digitalWrite(blue, HIGH);
-  digitalWrite(buzzer, HIGH);
-  //  client.stop();
-  Serial.println("HTTP INIT");
-  // if there's a successful connection
-  if (client.connect(server, 80)) {
-    delay(50);
-    digitalWrite(blue, LOW);
-    tone(buzzer, 200, 5);
-    delay(50);
+  {
     noTone(buzzer);
-    Serial.println("");
-    Serial.println("Connecting...");
-    client.print(F("GET /api/v1/closed/access/pad/use"));
-    client.print("?ip=");
-    client.print(WiFi.localIP());
-    {
-      WiFi.macAddress(mac);
-      client.print("&mac=");
-      client.print(mac[5], HEX);
-      client.print(":");
-      client.print(mac[4], HEX);
-      client.print(":");
-      client.print(mac[3], HEX);
-      client.print(":");
-      client.print(mac[2], HEX);
-      client.print(":");
-      client.print(mac[1], HEX);
-      client.print(":");
-      client.print(mac[0], HEX);
-    }
-    client.print("&action=register");
-    client.print("&code=");
-    client.print(Data);
-    client.println();
-
-    Serial.print("passlen  ");
-    Serial.println(passlen);
-    // note the time that the connection was made
-    char status[132] = {0};
-    client.readBytesUntil('\r', status, sizeof(status));
-    if (strcmp(status, "HTTP/1.1 200 OK") != 0) {
-      Serial.print(F("Unexpected response: "));
-      Serial.println(status);
-      clearData();
-    }
-    char endOfHeaders[] = "\r\n\r\n";
-    if (!client.find(endOfHeaders)) {
-      Serial.println(F("Invalid response"));
-
-    }
-    const size_t bufferSize = JSON_OBJECT_SIZE(2) + 30;
-    DynamicJsonBuffer jsonBuffer(bufferSize);
-    const char* json = "{\"passlength\":4,\"status\":error}";
-    JsonObject& root = jsonBuffer.parseObject(status);
-    passlen1 = root["length"];
-    const char* statusresult = root["status"];
-    initStat = statusresult;
-    if (initStat == "success")
-    {
-      passlen = passlen1 + 1;
-      Serial.println ("check equaled");
+    digitalWrite(blue, LOW);
+    digitalWrite(buzzer, HIGH);
+    //  client.stop();
+    Serial.println("HTTP INIT");
+    // if there's a successful connection
+    if (client.connect(server, 80)) {
       digitalWrite(green, HIGH);
       digitalWrite(red, HIGH);
-      validPass();
+      Serial.println("");
+      Serial.println("Connecting...");
+      client.print(F("GET /api/v1/closed/access/pad/use"));
+      client.print("?ip=");
+      client.print(WiFi.localIP());
+      {
+        WiFi.macAddress(mac);
+        client.print("&mac=");
+        client.print(mac[5], HEX);
+        client.print(":");
+        client.print(mac[4], HEX);
+        client.print(":");
+        client.print(mac[3], HEX);
+        client.print(":");
+        client.print(mac[2], HEX);
+        client.print(":");
+        client.print(mac[1], HEX);
+        client.print(":");
+        client.print(mac[0], HEX);
+      }
+      client.print("&action=register");
+      client.print("&code=");
+      client.print(Data);
+      client.println();
+
+      Serial.print("passlen  ");
+      Serial.println(passlen);
+      // note the time that the connection was made
+      lastConnectionTime = millis();
+      char status[132] = {0};
+      client.readBytesUntil('\r', status, sizeof(status));
+      if (strcmp(status, "HTTP/1.1 200 OK") != 0) {
+        Serial.print(F("Unexpected response: "));
+        Serial.println(status);
+        clearData();
+      }
+      char endOfHeaders[] = "\r\n\r\n";
+      if (!client.find(endOfHeaders)) {
+        Serial.println(F("Invalid response"));
+
+      }
+      const size_t bufferSize = JSON_OBJECT_SIZE(2) + 30;
+      DynamicJsonBuffer jsonBuffer(bufferSize);
+      const char* json = "{\"passlength\":4,\"status\":error}";
+      JsonObject& root = jsonBuffer.parseObject(status);
+      passlen1 = root["length"];
+      const char* statusresult = root["status"];
+      initStat = statusresult;
+      if (initStat == "success")
+      {
+        passlen = passlen1 + 1;
+        Serial.println ("check equaled");
+        digitalWrite(green, LOW);
+        digitalWrite(red, LOW);
+        validPass();
+      }
+      else
+      {
+        digitalWrite(green, LOW);
+        digitalWrite(red, LOW);
+        badPass();
+      }
     }
-    else
-    {
-      digitalWrite(green, HIGH);
-      digitalWrite(red, HIGH);
-      badPass();
-    }
+    clearData();
   }
-  else {
-    Serial.println("No connection fam");
-  }
-  clearData();
 }
 void httpRequest() {
   noTone(buzzer);
-  digitalWrite(blue, HIGH);
+  digitalWrite(blue, LOW);
   digitalWrite(buzzer, HIGH);
   Serial.println("HTTP REQUEST");
   if (data_count == passlen - 1 )
@@ -272,8 +269,8 @@ void httpRequest() {
     client.stop();
     // if there's a successful connection
     if (client.connect(server, 80)) {
-      digitalWrite(green, LOW);
-      digitalWrite(red, LOW);
+      digitalWrite(green, HIGH);
+      digitalWrite(red, HIGH);
       Serial.println("");
       Serial.println("Connecting...");
       client.print(F("GET /api/v1/closed/access/pad/use"));
@@ -301,6 +298,7 @@ void httpRequest() {
       Serial.print("passlen  ");
       Serial.println(passlen);
       // note the time that the connection was made
+      lastConnectionTime = millis();
       char status[132] = {0};
       client.readBytesUntil('\r', status, sizeof(status));
       if (strcmp(status, "HTTP/1.1 200 OK") != 0) {
@@ -322,19 +320,20 @@ void httpRequest() {
       usestat = statusresultuse;
       if (usestat == "error")
       {
-        digitalWrite(green, HIGH);
-        digitalWrite(red, HIGH);
+        digitalWrite(green, LOW);
+        digitalWrite(red, LOW);
         badPass();
       }
       if (usestat == "success")
       {
-        digitalWrite(green, HIGH);
-        digitalWrite(red, HIGH);
+        digitalWrite(green, LOW);
+        digitalWrite(red, LOW);
         validPass();
       }
     }
     else {
-      Serial.println("No connection fam");
+      // if you couldn't make a connection
+      Serial.println("Connection failed");
     }
 
     clearData();
@@ -355,21 +354,20 @@ void clearData()
 void badPass()
 {
   Timer1.detachInterrupt();
-  digitalWrite(blue, HIGH);
-  digitalWrite(red, LOW);
-  tone(buzzer, 1200, 150);
   digitalWrite(red, HIGH);
-  delay(150);
+  tone(buzzer, 1200, 150);
   digitalWrite(red, LOW);
+  delay(150);
+  digitalWrite(red, HIGH);
   delay(300);
   tone(buzzer, 1200, 150);
-  digitalWrite(red, HIGH);
+  digitalWrite(red, LOW);
   delay(150);
-  digitalWrite(red, LOW);;
+  digitalWrite(red, HIGH);;
   delay(300);
   tone(buzzer, 1200, 250);
   delay(50);
-  digitalWrite(red, HIGH);
+  digitalWrite(red, LOW);
   digitalWrite(buzzer, HIGH);
   Serial.println("Bad Pass");
   initialStatus();
@@ -378,32 +376,31 @@ void badPass()
 void validPass()
 {
   Timer1.detachInterrupt();
-  digitalWrite(blue, HIGH);
-  digitalWrite(green, LOW);
-  tone(buzzer, 1800, 50);
-  digitalWrite(green, HIGH);
-  delay(50);
-  digitalWrite(green, LOW);
-  delay(50);
   digitalWrite(green, HIGH);
   tone(buzzer, 1800, 50);
-  delay(50);
   digitalWrite(green, LOW);
   delay(50);
   digitalWrite(green, HIGH);
+  delay(50);
+  digitalWrite(green, LOW);
   tone(buzzer, 1800, 50);
   delay(50);
+  digitalWrite(green, HIGH);
+  delay(50);
   digitalWrite(green, LOW);
+  tone(buzzer, 1800, 50);
   delay(50);
   digitalWrite(green, HIGH);
+  delay(50);
+  digitalWrite(green, LOW);
   digitalWrite(buzzer, HIGH);
   Serial.println("Valid Pass");
   initialStatus();
 }
 void initialStatus() {
-  digitalWrite(blue, LOW);
-  digitalWrite(red, LOW);
-  digitalWrite(green, LOW);
+  digitalWrite(blue, HIGH);
+  digitalWrite(red, HIGH);
+  digitalWrite(green, HIGH);
 }
 void printWifiStatus()
 {
@@ -416,7 +413,7 @@ void printWifiStatus()
   Serial.print("IP Address: ");
   Serial.println(ip);
 
-  // print the received signal stre ngth
+  // print the received signal strength
   long rssi = WiFi.RSSI();
   Serial.print("Signal strength (RSSI):");
   Serial.print(rssi);
